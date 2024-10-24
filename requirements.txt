@@ -1,1 +1,4 @@
-
+sqlite3
+threading
+socket
+pickle
