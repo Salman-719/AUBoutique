@@ -32,3 +32,16 @@ AUBoutique is a user-friendly platform that facilitates the buying and selling o
 ```bash
 git clone https://github.com/yourusername/AUBoutique.git
 cd AUBoutique
+
+```
+##Project Structure
+```bash
+AUBoutique/
+│
+├── client.py                # Client-side implementation
+├── server.py                # Server-side implementation
+├── requirements.txt         # Python dependencies
+├── README.md                # Project documentation
+└── database/                # SQLite database folder
+    └── auboutique.db        # Database storing user and product data
+```
