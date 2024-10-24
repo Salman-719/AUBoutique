@@ -34,7 +34,7 @@ git clone https://github.com/yourusername/AUBoutique.git
 cd AUBoutique
 
 ```
-##Project Structure
+## Project Structure
 ```bash
 AUBoutique/
 │
