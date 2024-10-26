@@ -34,6 +34,13 @@ git clone https://github.com/Salman-719/AUBoutique.git
 cd AUBoutique
 
 ```
+
+### Install Required Libraries
+To install the necessary Python libraries, run:
+
+```bash
+pip install -r requirements.txt
+```
 ### Run the Server
 Start the server by specifying a port number:
 
