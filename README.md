@@ -1,4 +1,4 @@
-# AUBoutique - An Online Marketplace for AUB Community
+# AUBoutique - An Online Marketplace for AUB Community 
 
 AUBoutique is a user-friendly platform that facilitates the buying and selling of a variety of products such as craftwork, textbooks, and collectibles for the AUB community. This project is developed using a client-server architecture in Python.
 
