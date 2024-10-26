@@ -34,6 +34,30 @@ git clone https://github.com/Salman-719/AUBoutique.git
 cd AUBoutique
 
 ```
+### Run the Server
+Start the server by specifying a port number:
+
+```bash
+python server.py <port_number>
+```
+Example:
+```bash
+python server.py 8080
+```
+
+Run the Client
+Start the client by specifying the server domain (or IP address) and port number:
+
+```bash
+python client.py <server_domain> <port_number>
+```
+Example:
+
+```bash
+python client.py localhost 8080
+```
+
+
 ## Project Structure
 ```bash
 AUBoutique/
