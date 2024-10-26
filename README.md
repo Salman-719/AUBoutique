@@ -30,7 +30,7 @@ AUBoutique is a user-friendly platform that facilitates the buying and selling o
 
 ### Clone the Repository
 ```bash
-git clone https://github.com/yourusername/AUBoutique.git
+git clone https://github.com/Salman-719/AUBoutique.git
 cd AUBoutique
 
 ```
