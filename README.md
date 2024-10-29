@@ -68,11 +68,10 @@ python client.py localhost 8080
 ## Project Structure
 ```bash
 AUBoutique/
-│
-├── client.py                # Client-side implementation
-├── server.py                # Server-side implementation
-├── requirements.txt         # Python dependencies
-├── README.md                # Project documentation
-└── database/                # SQLite database folder
-    └── auboutique.db        # Database storing user and product data
+├── client.py                # Client-side code for connecting to the server
+├── server.py                # Server-side code to handle requests and manage the database
+├── auboutique.db            # SQLite database file (auto-generated on first run)
+├── requirements.txt         # Python dependencies (if needed)
+└── README.md                # Documentation for the project
+
 ```
