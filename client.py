@@ -14,9 +14,36 @@ def send_request(host, port, method, path, body=None):
             headers += f"Content-Length: {len(body)}\r\n\r\n{body}"
         else:
             headers += "\r\n"
+        
         s.sendall(headers.encode('utf-8'))
         response = s.recv(4096).decode('utf-8')
-        return json.loads(response.split('\r\n\r\n')[1])
+        
+        parts = response.split('\r\n\r\n', 1)
+        json_part = parts[1] if len(parts) > 1 else parts[0]
+        
+        try:
+            return json.loads(json_part)
+        except json.JSONDecodeError:
+            print("Failed to decode JSON from server response")
+            print("Raw response:", response)
+            return {"error": "Failed to decode JSON from server response"}
+
+def list_products():
+    response = send_request('localhost', 8080, 'GET', '/products')
+    if "error" not in response:
+        print("Products List:", response)
+    else:
+        print(response["error"])
+
+def buy_product(user_id):
+    product_id = int(input("Enter Product ID to buy: "))
+    data = {"buyer_id": user_id, "product_id": product_id}
+    response = send_request('localhost', 8080, 'POST', '/buy_product', data)
+    if "error" not in response:
+        print("Purchase Response:", response)
+    else:
+        print(response["error"])
+
 
 def register_user():
     while True:
@@ -33,23 +60,31 @@ def register_user():
         password = hash_password(input("Password: "))
         data = {"first_name": first_name, "last_name": last_name, "email": email, "username": username, "password": password}
         response = send_request('localhost', 8080, 'POST', '/register', data)
-        print(response["message"])
-        break
+        if "error" not in response:
+            print(response["message"])
+            break
+        else:
+            print(response["error"])
 
 def login_user():
     username = input("Username: ")
     password = hash_password(input("Password: "))
     data = {"username": username, "password": password}
     response = send_request('localhost', 8080, 'POST', '/login', data)
-    return response
+    if "error" not in response:
+        return response
+    else:
+        print(response["error"])
+        return None
 
 def logout_user(user_id):
     response = send_request('localhost', 8080, 'POST', '/logout', {"user_id": user_id})
-    print(response["message"])
+    if "error" not in response:
+        print(response["message"])
+    else:
+        print(response["error"])
 
-def list_products():
-    response = send_request('localhost', 8080, 'GET', '/products')
-    print(response)
+
 
 def add_product(user_id):
     data = {
@@ -61,19 +96,28 @@ def add_product(user_id):
         "image": input("Image URL: ")
     }
     response = send_request('localhost', 8080, 'POST', '/add_product', data)
-    print(response["message"])
+    if "error" not in response:
+        print(response["message"])
+    else:
+        print(response["error"])
 
 def search_product():
     search_term = input("Enter product name to search: ")
     data = {"search_term": search_term}
     response = send_request('localhost', 8080, 'POST', '/search_product', data)
-    print(response)
+    if "error" not in response:
+        print(response)
+    else:
+        print(response["error"])
 
 def search_user_products():
     username = input("Enter username to view their products: ")
     data = {"username": username}
     response = send_request('localhost', 8080, 'POST', '/search_user_products', data)
-    print(response)
+    if "error" not in response:
+        print(response)
+    else:
+        print(response["error"])
 
 def logged_in_menu(user_id):
     while True:
@@ -86,7 +130,11 @@ def logged_in_menu(user_id):
         elif choice == '3':
             product_id = int(input("Enter Product ID to buy: "))
             data = {"buyer_id": user_id, "product_id": product_id}
-            print(send_request('localhost', 8080, 'POST', '/buy_product', data)["message"])
+            response = send_request('localhost', 8080, 'POST', '/buy_product', data)
+            if "error" not in response:
+                print(response["message"])
+            else:
+                print(response["error"])
         elif choice == '4':
             search_product()
         elif choice == '5':
@@ -106,10 +154,10 @@ def main():
             register_user()
         elif choice == '2':
             response = login_user()
-            if "user_id" in response:
+            if response and "user_id" in response:
                 print(response["message"])
                 logged_in_menu(response["user_id"])
-            else:
+            elif response:
                 print(response["message"])
         elif choice == '3':
             print("Goodbye!")
