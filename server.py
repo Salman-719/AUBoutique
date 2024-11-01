@@ -95,6 +95,28 @@ def process_request(request):
     else:
         return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
 
+    
+def buy_product(data):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        # Check if product exists and is not already bought
+        c.execute("SELECT * FROM products WHERE id = ? AND buyer_id IS NULL", (data['product_id'],))
+        product = c.fetchone()
+        if product:
+            # Mark the product as bought
+            c.execute("UPDATE products SET buyer_id = ? WHERE id = ?", (data['buyer_id'], data['product_id']))
+            conn.commit()
+            response = {"message": "Product purchase successful"}
+        else:
+            response = {"message": "Product not available or already sold"}
+    except Exception as e:
+        response = {"message": str(e)}
+    finally:
+        conn.close()
+    return 'HTTP/1.1 200 OK\r\n\r\n' + json.dumps(response)
+
+
 # User registration with input validation and hashed password
 def register_user(data):
     if not (data['first_name'].isalpha() and data['last_name'].isalpha()):
