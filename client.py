@@ -28,6 +28,22 @@ def send_request(host, port, method, path, body=None):
             print("Raw response:", response)
             return {"error": "Failed to decode JSON from server response"}
 
+
+def view_online_users():
+    response = send_request('localhost', 8080, 'GET', '/get_online_users')
+    if response and "online_users" in response:
+        online_users = response["online_users"]
+        if online_users:
+            print("Online users:")
+            for user in online_users:
+                print(user)
+        else:
+            print("No users are currently online.")
+    else:
+        print("Failed to retrieve online users. Check server logs for more details.")
+
+
+
 def list_products():
     response = send_request('localhost', 8080, 'GET', '/products')
     if "error" not in response:
@@ -121,29 +137,66 @@ def search_user_products():
 
 def logged_in_menu(user_id):
     while True:
-        choice = input("1. View Products\n2. Add Product\n3. Buy Product\n4. Search Products\n5. Search User Products\n6. Logout\n> ")
-        
+        choice = input("1. View Products\n2. Add Product\n3. Buy Product\n4. Search Products\n5. Search User Products\n6. Send Message\n7. View Messages\n8. Logout\n> ")
         if choice == '1':
             list_products()
         elif choice == '2':
             add_product(user_id)
         elif choice == '3':
-            product_id = int(input("Enter Product ID to buy: "))
-            data = {"buyer_id": user_id, "product_id": product_id}
-            response = send_request('localhost', 8080, 'POST', '/buy_product', data)
-            if "error" not in response:
-                print(response["message"])
-            else:
-                print(response["error"])
+            try:
+                product_id = int(input("Enter Product ID to buy: "))
+                if product_id <= 0:
+                    print("Invalid input: Product ID must be a positive integer.")
+                else:
+                    data = {"buyer_id": user_id, "product_id": product_id}
+                    response = send_request('localhost', 8080, 'POST', '/buy_product', data)
+                    if "error" not in response:
+                        print(response["message"])
+                    else:
+                        print(response["error"])
+            except ValueError:
+                print("Invalid input: Please enter a valid integer for Product ID.")
         elif choice == '4':
             search_product()
         elif choice == '5':
             search_user_products()
         elif choice == '6':
+            send_message(user_id)
+        elif choice == '7':
+            view_messages(user_id)
+        elif choice == '8':
             logout_user(user_id)
+            print("Logged out successfully. Goodbye!")
             break
         else:
             print("Invalid choice. Please try again.")
+
+def send_message(user_id):
+    online_users = view_online_users()
+    if online_users:
+        try:
+            choice = int(input("Select the number of the user you want to message: ")) - 1
+            if 0 <= choice < len(online_users):
+                receiver_username = online_users[choice]
+                message = input("Enter your message: ")
+                data = {"sender_id": user_id, "receiver_username": receiver_username, "message": message}
+                response = send_request('localhost', 8080, 'POST', '/send_message', data)
+                print(response.get("message", "Failed to send message."))
+            else:
+                print("Invalid selection.")
+        except ValueError:
+            print("Invalid input: Please enter a valid number.")
+
+def view_messages(user_id):
+    response = send_request('localhost', 8080, 'POST', '/get_messages', {"user_id": user_id})
+    if "messages" in response:
+        for msg in response['messages']:
+            print(f"From {msg[0]}: {msg[1]} at {msg[2]}")
+    else:
+        print("No messages or failed to retrieve messages.")
+
+
+
 
 def main():
     print("Welcome to AUBoutique")
