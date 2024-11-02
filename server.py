@@ -6,7 +6,6 @@ import hashlib
 
 DB_NAME = 'auboutique.db'
 
-# Function to hash passwords
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
@@ -14,8 +13,6 @@ def hash_password(password):
 def setup_database():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    
-    # Create users table if it doesn't exist
     c.execute('''CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY,
                     first_name TEXT,
@@ -25,8 +22,6 @@ def setup_database():
                     password TEXT,
                     online INTEGER DEFAULT 0
                 )''')
-    
-    # Create products table if it doesn't exist
     c.execute('''CREATE TABLE IF NOT EXISTS products (
                     id INTEGER PRIMARY KEY,
                     name TEXT,
@@ -39,7 +34,15 @@ def setup_database():
                     FOREIGN KEY (owner_id) REFERENCES users (id),
                     FOREIGN KEY (buyer_id) REFERENCES users (id)
                 )''')
-    
+    c.execute('''CREATE TABLE IF NOT EXISTS messages (
+                    id INTEGER PRIMARY KEY,
+                    sender_id INTEGER,
+                    receiver_id INTEGER,
+                    message TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (sender_id) REFERENCES users (id),
+                    FOREIGN KEY (receiver_id) REFERENCES users (id)
+                )''')
     conn.commit()
     conn.close()
 
@@ -56,44 +59,97 @@ def handle_client(conn, addr):
 
 # Process HTTP request
 def process_request(request):
-    # Try splitting headers and body to prevent errors
     try:
         headers, body = request.split('\r\n\r\n', 1)
-    except ValueError:
-        return 'HTTP/1.1 400 Bad Request\r\n\r\n{"message": "Malformed request"}'
-    
-    # Parse method and path from headers
-    try:
         method, path, _ = headers.split(' ', 2)
     except ValueError:
         return 'HTTP/1.1 400 Bad Request\r\n\r\n{"message": "Malformed request"}'
     
-    # Route to appropriate function based on the path
-    if path == '/register' and method == 'POST':
+    if method == 'POST':
         data = json.loads(body)
-        return register_user(data)
-    elif path == '/login' and method == 'POST':
-        data = json.loads(body)
-        return login_user(data)
-    elif path == '/logout' and method == 'POST':
-        data = json.loads(body)
-        return logout_user(data['user_id'])
-    elif path == '/products' and method == 'GET':
+        if path == '/register':
+            return register_user(data)
+        elif path == '/login':
+            return login_user(data)
+        elif path == '/logout':
+            return logout_user(data)
+        elif path == '/add_product':
+            return add_product(data)
+        elif path == '/buy_product':
+            return buy_product(data)
+        elif path == '/search_product':
+            return search_product(data['search_term'])
+        elif path == '/search_user_products':
+            return search_user_products(data['username'])
+        elif path == '/send_message':
+            return send_message(data)
+        elif path == '/get_messages':
+            return get_messages(data['user_id'])
+        elif path == '/get_online_users':
+            return get_online_users()
+        else:
+            return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
+    elif method == 'GET' and path == '/products':
         return list_products()
-    elif path == '/add_product' and method == 'POST':
-        data = json.loads(body)
-        return add_product(data)
-    elif path == '/buy_product' and method == 'POST':
-        data = json.loads(body)
-        return buy_product(data)
-    elif path == '/search_product' and method == 'POST':
-        data = json.loads(body)
-        return search_product(data['search_term'])
-    elif path == '/search_user_products' and method == 'POST':
-        data = json.loads(body)
-        return search_user_products(data['username'])
     else:
         return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
+
+# New function to get online users
+def get_online_users():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        c.execute("SELECT username FROM users WHERE online = 1")
+        online_users = c.fetchall()
+        if online_users:
+            users_list = [user[0] for user in online_users]  # Unpack from tuple
+            response_body = json.dumps({"online_users": users_list})
+            response = 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n' + response_body
+            print("Successful retrieval of online users.")  # Success debug print
+            return response
+        else:
+            print("No online users found.")
+            return 'HTTP/1.1 204 No Content\r\nContent-Type: application/json\r\n\r\n{"online_users": []}'
+    except sqlite3.Error as e:
+        print("SQL Error retrieving online users:", str(e))  # Specific SQL error logging
+        return 'HTTP/1.1 500 Internal Server Error\r\n\r\n{"message": "Internal Server Error due to SQL error: ' + str(e) + '"}'
+    finally:
+        conn.close()
+
+
+
+def send_message(data):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    # Resolve both sender and receiver IDs
+    c.execute("SELECT id, online FROM users WHERE username = ?", (data['receiver_username'],))
+    receiver = c.fetchone()
+    c.execute("SELECT online FROM users WHERE id = ?", (data['sender_id'],))
+    sender_online = c.fetchone()
+    
+    if receiver and sender_online and sender_online[0] == 1 and receiver[1] == 1:
+        c.execute("INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
+                  (data['sender_id'], receiver[0], data['message']))
+        conn.commit()
+        return 'HTTP/1.1 200 OK\r\n\r\n{"message": "Message sent successfully."}'
+    else:
+        return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Receiver not found or not online."}'
+
+def get_messages(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    # Update the SQL query to join with the users table to get the sender's username
+    c.execute("""
+        SELECT u.username, m.message, m.timestamp 
+        FROM messages m
+        JOIN users u ON u.id = m.sender_id
+        WHERE m.receiver_id = ?
+        ORDER BY m.timestamp DESC
+    """, (user_id,))
+    messages = c.fetchall()
+    conn.close()
+    return 'HTTP/1.1 200 OK\r\n\r\n' + json.dumps({"messages": messages})
+
 
     
 def buy_product(data):
@@ -202,7 +258,6 @@ def search_user_products(username):
         conn.close()
         return '{"message": "User not found"}'
 
-# Start the server
 def start_server(host='localhost', port=8080):
     setup_database()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
