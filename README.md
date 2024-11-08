@@ -25,7 +25,7 @@ AUBoutique is a user-friendly platform that facilitates the buying and selling o
 
 ### Prerequisites
 - Python 3.x
-- SQLite (or another database system of your choice)
+- SQLite 
 - Basic understanding of client-server architecture
 
 ### Clone the Repository
