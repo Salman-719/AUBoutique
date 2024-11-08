@@ -6,6 +6,7 @@ import hashlib
 
 DB_NAME = 'auboutique.db'
 
+# Function to hash passwords
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
@@ -46,6 +47,7 @@ def setup_database():
     conn.commit()
     conn.close()
 
+
 # Client handler function
 def handle_client(conn, addr):
     with conn:
@@ -55,8 +57,7 @@ def handle_client(conn, addr):
             if not request:
                 break
             response = process_request(request)
-            if response:
-                conn.sendall(response.encode('utf-8'))
+            conn.sendall(response.encode('utf-8'))
 
 # Process HTTP request
 def process_request(request):
@@ -73,7 +74,7 @@ def process_request(request):
         elif path == '/login':
             return login_user(data)
         elif path == '/logout':
-            return logout_user(data['user_id'])
+            return logout_user(data)
         elif path == '/add_product':
             return add_product(data)
         elif path == '/buy_product':
@@ -82,12 +83,10 @@ def process_request(request):
             return search_product(data['search_term'])
         elif path == '/search_user_products':
             return search_user_products(data['username'])
-        elif path == '/send_message_direct':
-            return send_message_direct(data)
+        elif path == '/send_message':
+            return send_message(data)
         elif path == '/get_messages':
             return get_messages(data['user_id'])
-        elif path == '/get_online_users':
-            return get_online_users()
         else:
             return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
     elif method == 'GET' and path == '/products':
@@ -95,29 +94,40 @@ def process_request(request):
     else:
         return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
 
-# Get list of online users
-def get_online_users():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT username FROM users WHERE online = 1")
-    online_users = [user[0] for user in c.fetchall()]
-    conn.close()
-    response_body = json.dumps({"online_users": online_users})
-    return 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n' + response_body
+# Add these functions in the server code
 
-# Direct message without storage
-def send_message_direct(data):
+def send_message(data):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # Check if the receiver is online
-    c.execute("SELECT online FROM users WHERE username = ?", (data['receiver_username'],))
-    receiver_online = c.fetchone()
+    # Resolve both sender and receiver IDs
+    c.execute("SELECT id, online FROM users WHERE username = ?", (data['receiver_username'],))
+    receiver = c.fetchone()
+    c.execute("SELECT online FROM users WHERE id = ?", (data['sender_id'],))
+    sender_online = c.fetchone()
     
-    if receiver_online and receiver_online[0] == 1:
-        response = json.dumps({"message": f"Message sent to {data['receiver_username']}: {data['message']}"})
-        return 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n' + response
+    if receiver and sender_online and sender_online[0] == 1 and receiver[1] == 1:
+        c.execute("INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
+                  (data['sender_id'], receiver[0], data['message']))
+        conn.commit()
+        return 'HTTP/1.1 200 OK\r\n\r\n{"message": "Message sent successfully."}'
     else:
-        return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "User not online"}'
+        return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Receiver not found or not online."}'
+
+def get_messages(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    # Update the SQL query to join with the users table to get the sender's username
+    c.execute("""
+        SELECT u.username, m.message, m.timestamp 
+        FROM messages m
+        JOIN users u ON u.id = m.sender_id
+        WHERE m.receiver_id = ?
+        ORDER BY m.timestamp DESC
+    """, (user_id,))
+    messages = c.fetchall()
+    conn.close()
+    return 'HTTP/1.1 200 OK\r\n\r\n' + json.dumps({"messages": messages})
+
 
     
 def buy_product(data):
@@ -226,6 +236,7 @@ def search_user_products(username):
         conn.close()
         return '{"message": "User not found"}'
 
+# Start the server
 def start_server(host='localhost', port=8080):
     setup_database()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -237,4 +248,3 @@ def start_server(host='localhost', port=8080):
             threading.Thread(target=handle_client, args=(conn, addr)).start()
 
 start_server()
-
