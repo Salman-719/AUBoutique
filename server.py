@@ -21,7 +21,8 @@ def setup_database():
                     email TEXT,
                     username TEXT UNIQUE,
                     password TEXT,
-                    online INTEGER DEFAULT 0
+                    online INTEGER DEFAULT 0,
+                    port INTEGER DEFAULT NULL
                 )''')
     c.execute('''CREATE TABLE IF NOT EXISTS products (
                     id INTEGER PRIMARY KEY,
@@ -46,7 +47,6 @@ def setup_database():
                 )''')
     conn.commit()
     conn.close()
-
 
 # Client handler function
 def handle_client(conn, addr):
@@ -74,7 +74,7 @@ def process_request(request):
         elif path == '/login':
             return login_user(data)
         elif path == '/logout':
-            return logout_user(data)
+            return logout_user(data['user_id'])
         elif path == '/add_product':
             return add_product(data)
         elif path == '/buy_product':
@@ -85,8 +85,6 @@ def process_request(request):
             return search_user_products(data['username'])
         elif path == '/send_message':
             return send_message(data)
-        elif path == '/get_messages':
-            return get_messages(data['user_id'])
         else:
             return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
     elif method == 'GET' and path == '/products':
@@ -94,72 +92,8 @@ def process_request(request):
     else:
         return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
 
-# Add these functions in the server code
-
-def send_message(data):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    # Resolve both sender and receiver IDs
-    c.execute("SELECT id, online FROM users WHERE username = ?", (data['receiver_username'],))
-    receiver = c.fetchone()
-    c.execute("SELECT online FROM users WHERE id = ?", (data['sender_id'],))
-    sender_online = c.fetchone()
-    
-    if receiver and sender_online and sender_online[0] == 1 and receiver[1] == 1:
-        c.execute("INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
-                  (data['sender_id'], receiver[0], data['message']))
-        conn.commit()
-        return 'HTTP/1.1 200 OK\r\n\r\n{"message": "Message sent successfully."}'
-    else:
-        return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Receiver not found or not online."}'
-
-def get_messages(user_id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    # Update the SQL query to join with the users table to get the sender's username
-    c.execute("""
-        SELECT u.username, m.message, m.timestamp 
-        FROM messages m
-        JOIN users u ON u.id = m.sender_id
-        WHERE m.receiver_id = ?
-        ORDER BY m.timestamp DESC
-    """, (user_id,))
-    messages = c.fetchall()
-    conn.close()
-    return 'HTTP/1.1 200 OK\r\n\r\n' + json.dumps({"messages": messages})
-
-
-    
-def buy_product(data):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    try:
-        # Check if product exists and is not already bought
-        c.execute("SELECT * FROM products WHERE id = ? AND buyer_id IS NULL", (data['product_id'],))
-        product = c.fetchone()
-        if product:
-            # Mark the product as bought
-            c.execute("UPDATE products SET buyer_id = ? WHERE id = ?", (data['buyer_id'], data['product_id']))
-            conn.commit()
-            response = {"message": "Product purchase successful"}
-        else:
-            response = {"message": "Product not available or already sold"}
-    except Exception as e:
-        response = {"message": str(e)}
-    finally:
-        conn.close()
-    return 'HTTP/1.1 200 OK\r\n\r\n' + json.dumps(response)
-
-
-# User registration with input validation and hashed password
+# User registration
 def register_user(data):
-    if not (data['first_name'].isalpha() and data['last_name'].isalpha()):
-        return '{"message": "Names must contain only letters"}'
-    if not data['email'].endswith('@mail.aub.edu'):
-        return '{"message": "Email must end with @mail.aub.edu"}'
-    if not data['username'] or not data['password']:
-        return '{"message": "Username and password cannot be empty"}'
-
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     try:
@@ -173,38 +107,33 @@ def register_user(data):
     finally:
         conn.close()
 
-# User login and logout handling
+# User login
 def login_user(data):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     hashed_password = hash_password(data['password'])
     c.execute("SELECT id FROM users WHERE username = ? AND password = ?", (data['username'], hashed_password))
     user = c.fetchone()
+    
     if user:
-        c.execute("UPDATE users SET online = 1 WHERE id = ?", (user[0],))
+        c.execute("UPDATE users SET online = 1, port = ? WHERE id = ?", (data['port'], user[0]))
         conn.commit()
         conn.close()
         return json.dumps({"user_id": user[0], "message": "Login successful"})
+    
     conn.close()
     return json.dumps({"message": "Invalid credentials"})
 
+# User logout
 def logout_user(user_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("UPDATE users SET online = 0 WHERE id = ?", (user_id,))
+    c.execute("UPDATE users SET online = 0, port = NULL WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
     return '{"message": "Logout successful"}'
 
-# List, add, and search products
-def list_products():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT * FROM products")
-    products = c.fetchall()
-    conn.close()
-    return json.dumps(products)
-
+# Add product
 def add_product(data):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -214,6 +143,35 @@ def add_product(data):
     conn.close()
     return '{"message": "Product added successfully"}'
 
+# List all products
+def list_products():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT * FROM products")
+    products = c.fetchall()
+    conn.close()
+    return json.dumps(products)
+
+# Buy product
+def buy_product(data):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        c.execute("SELECT * FROM products WHERE id = ? AND buyer_id IS NULL", (data['product_id'],))
+        product = c.fetchone()
+        if product:
+            c.execute("UPDATE products SET buyer_id = ? WHERE id = ?", (data['buyer_id'], data['product_id']))
+            conn.commit()
+            response = {"message": "Product purchase successful"}
+        else:
+            response = {"message": "Product not available or already sold"}
+    except Exception as e:
+        response = {"message": str(e)}
+    finally:
+        conn.close()
+    return 'HTTP/1.1 200 OK\r\n\r\n' + json.dumps(response)
+
+# Search for products by name
 def search_product(search_term):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -222,6 +180,7 @@ def search_product(search_term):
     conn.close()
     return json.dumps(products)
 
+# Search for all products by a specific user
 def search_user_products(username):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -236,7 +195,35 @@ def search_user_products(username):
         conn.close()
         return '{"message": "User not found"}'
 
-# Start the server
+# Send a message to another user
+def send_message(data):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT id, online, port, username FROM users WHERE username = ?", (data['receiver_username'],))
+    receiver = c.fetchone()
+    
+    if receiver and receiver[1] == 1:  # Check if receiver is online
+        c.execute("INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
+                  (data['sender_id'], receiver[0], data['message']))
+        conn.commit()
+        
+        receiver_port = receiver[2]
+        sender_username = data.get("sender_username", "Unknown")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.connect(('localhost', receiver_port))
+                s.sendall(json.dumps({
+                    "new_message": True, 
+                    "from_username": sender_username, 
+                    "message": data['message']
+                }).encode('utf-8'))
+            except Exception as e:
+                print(f"Failed to send message to {receiver_port}: {e}")
+                
+        return 'HTTP/1.1 200 OK\r\n\r\n{"message": "Message sent successfully."}'
+    else:
+        return 'HTTP/1.1 200 OK\r\n\r\n{"message": "Receiver not online."}'
+
 def start_server(host='localhost', port=8080):
     setup_database()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
