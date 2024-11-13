@@ -9,10 +9,9 @@ AUBoutique is a user-friendly platform that facilitates the buying and selling o
 - **User Login**: Registered users can log in to their account using their credentials.
 - **Product Listing**: Users can view a list of available products for sale, along with the seller's information.
 - **Product Details**: Users can view products from a specific seller.
-- **Online Status**: Buyers can check if the product's seller is online and initiate a text chat with them through the platform.
+- **Live Chatting**: Users can initiate a text chat with other users through the platform if both are online.
 - **Buy Products**: Buyers can select products and confirm purchases, receiving a confirmation message to collect the item from the AUB Post Office.
 - **Sell Products**: Sellers can add products to the marketplace by providing a product name, image, price, and description.
-- **View Buyers**: Sellers can view who bought their products.
 
 ### Server-Side
 - **Account Management**: The server allows user registration, login, and authentication.
