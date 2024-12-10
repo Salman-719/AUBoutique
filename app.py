@@ -110,7 +110,8 @@ class LoginPage(QWidget):
         if "error" in response:
             QMessageBox.critical(self, "Error", response["error"])
         else:
-            self.parent.boutique.start_listening()
+            chat_page = self.parent.pages['chat']
+            self.parent.boutique.start_listening(chat_page)
             QMessageBox.information(self, "Success", "Logged in successfully!")
             self.parent.switch_page('home')
 
@@ -311,7 +312,7 @@ class UserProductsPage(QWidget):
             QMessageBox.critical(self, "Error", response["error"])
         else:
             self.results_list.clear()
-            for product in response.get("products", []):
+            for product in response:
                 self.results_list.addItem(f"{product['name']} - {product['price']} USD")
 
 class AddProductPage(QWidget):
@@ -372,10 +373,16 @@ class ChatPage(QWidget):
         self.parent = parent
         layout = QVBoxLayout()
 
+        # Title label
         self.info_label = QLabel("P2P Chat")
         self.info_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.info_label)
 
+        # Messages display area
+        self.messages_list = QListWidget()
+        layout.addWidget(self.messages_list)
+
+        # Form layout for sending messages
         self.form_layout = QFormLayout()
         self.receiver_input = QLineEdit()
         self.message_input = QLineEdit()
@@ -383,6 +390,7 @@ class ChatPage(QWidget):
         self.form_layout.addRow("Message:", self.message_input)
         layout.addLayout(self.form_layout)
 
+        # Buttons for sending message and going back
         self.send_button = QPushButton("Send Message")
         self.send_button.clicked.connect(self.handle_send_message)
         self.back_button = QPushButton("Back to Home")
@@ -398,11 +406,20 @@ class ChatPage(QWidget):
     def handle_send_message(self):
         receiver = self.receiver_input.text()
         message = self.message_input.text()
+        if not receiver or not message:
+            QMessageBox.warning(self, "Warning", "Please fill in both fields.")
+            return
+
         response = self.parent.boutique.p2p_chat(receiver, message)
         if "error" in response:
             QMessageBox.critical(self, "Error", response["error"])
         else:
-            QMessageBox.information(self, "Success", "Message sent successfully!")
+            self.messages_list.addItem(f"You to {receiver}: {message}")
+            self.message_input.clear()
+
+    def display_received_message(self, from_username, message):
+        """Method to add received messages to the messages list."""
+        self.messages_list.addItem(f"{from_username}: {message}")
 
 
 
@@ -444,18 +461,69 @@ class RateProductPage(QWidget):
         else:
             QMessageBox.information(self, "Success", "Rating submitted successfully!")
 
-
 class ProductsPage(QWidget):
-    # Add this function to handle view average rating
-    def handle_view_average_rating(self):
-        product_id = self.get_selected_product_id()
-        if product_id:
-            response = self.parent.boutique.view_average_rating(product_id)
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent
+        layout = QVBoxLayout()
+
+        # Title Label
+        self.title_label = QLabel("Products")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.title_label)
+
+        # List Widget to Display Products
+        self.products_list = QListWidget()
+        layout.addWidget(self.products_list)
+
+        # Buy Button
+        self.buy_button = QPushButton("Buy Selected Product")
+        self.buy_button.clicked.connect(self.handle_buy_product)
+        layout.addWidget(self.buy_button)
+
+        # Refresh Button
+        self.refresh_button = QPushButton("Refresh Products")
+        self.refresh_button.clicked.connect(self.load_products)
+        layout.addWidget(self.refresh_button)
+
+        # Back Button
+        self.back_button = QPushButton("Back to Home")
+        self.back_button.clicked.connect(lambda: self.parent.switch_page('home'))
+        layout.addWidget(self.back_button)
+
+        # Set Layout
+        self.setLayout(layout)
+
+    def load_products(self):
+        # Fetch products from the backend
+        response = self.parent.boutique.list_products()
+        if "error" in response:
+            QMessageBox.critical(self, "Error", response["error"])
+        else:
+            self.products_list.clear()  # Clear existing items in the list
+            products = response
+            if products:
+                for product in products:
+                    # Display product details (adjust as needed for your backend response structure)
+                    product_details = f"ID: {product['id']} | Name: {product['name']} | Price: {product['price']} | Quantity: {product["quantity"]} USD"
+                    self.products_list.addItem(product_details)
+            else:
+                self.products_list.addItem("No products available.")
+
+    def handle_buy_product(self):
+        # Get selected product details
+        selected_item = self.products_list.currentItem()
+        if selected_item:
+            # Extract product ID from the selected item's text
+            product_id = selected_item.text().split("|")[0].split(":")[1].strip()
+            response = self.parent.boutique.buy_product(product_id)
             if "error" in response:
                 QMessageBox.critical(self, "Error", response["error"])
             else:
-                average_rating = response.get("average_rating", "N/A")
-                QMessageBox.information(self, "Average Rating", f"Average Rating: {average_rating}")
+                QMessageBox.information(self, "Success", "Product purchased successfully!")
+                self.load_products()  # Refresh product list after purchase
+        else:
+            QMessageBox.warning(self, "Warning", "Please select a product to buy.")
 
 class HomePage(QWidget):
     def __init__(self, parent):

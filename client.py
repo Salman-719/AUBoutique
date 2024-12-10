@@ -18,7 +18,7 @@ class AUBoutique:
     def hash_password(password):
         return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-    def listen_for_messages(self):
+    def listen_for_messages(self, chat_page):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('0.0.0.0', self.client_port))
             s.listen()
@@ -28,14 +28,20 @@ class AUBoutique:
                     try:
                         data = conn.recv(1024).decode('utf-8')
                         message_data = json.loads(data)
-                        print(f"\nMessage from {message_data['from_username']}: {message_data['message']}")
+                        # Call the ChatPage method to update the UI
+                        chat_page.display_received_message(
+                            message_data['from_username'],
+                            message_data['message']
+                        )
                     except Exception as e:
                         print(f"Error receiving message: {e}")
 
-    def start_listening(self):
+
+    def start_listening(self, chat_page):
         self.messaging_active = True
-        self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
+        self.listener_thread = threading.Thread(target=self.listen_for_messages, args=(chat_page,), daemon=True)
         self.listener_thread.start()
+
 
     def stop_listening(self):
         self.messaging_active = False
@@ -73,19 +79,27 @@ class AUBoutique:
         return response
 
     def login_user(self, username, password, client_port):
-        self.client_port = client_port
-        ip_address = socket.gethostbyname(socket.gethostname())
-        data = {
-            "username": username,
-            "password": self.hash_password(password),
-            "port": client_port,
-            "ip_address": ip_address
-        }
-        response = self.send_request('POST', '/login', data)
-        if "user_id" in response:
-            self.user_id = response["user_id"]
-            self.username = username
-        return response
+        try:
+            self.client_port = client_port
+            ip_address = socket.gethostbyname(socket.gethostname())
+            data = {
+                "username": username,
+                "password": self.hash_password(password),
+                "port": client_port,
+                "ip_address": ip_address
+            }
+            response = self.send_request('POST', '/login', data)
+
+            if "user_id" in response:
+                self.user_id = response["user_id"]
+                self.username = username
+                return response
+            else:
+                # Handle case where login fails but no explicit error is raised
+                return {"error": "Login failed. Please check your credentials."}
+        except Exception as e:
+            # Log or handle the exception
+            return {"error": "An error occurred during login.", "details": str(e)}
 
     def logout_user(self):
         response = self.send_request('POST', '/logout', {"user_id": self.user_id})

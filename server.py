@@ -77,7 +77,7 @@ def process_request(request):
         headers, body = request.split('\r\n\r\n', 1)
         method, path, _ = headers.split(' ', 2)
     except ValueError:
-        return 'HTTP/1.1 400 Bad Request\r\n\r\n{"message": "Malformed request"}'
+        return 'HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n\r\n{"message": "Malformed request"}'
     
     if method == 'POST':
         data = json.loads(body)
@@ -104,11 +104,41 @@ def process_request(request):
         elif path == '/get_user_connection_info':
             return get_user_connection_info(data)
         else:
-            return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
+            return 'HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\r\n{"message": "Not found"}'
     elif method == 'GET' and path == '/products':
         return list_products()
     else:
-        return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
+        return 'HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\r\n{"message": "Not found"}'
+
+def list_products():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        c.execute("SELECT * FROM products")
+        products = c.fetchall()
+        # Structure the response data as JSON
+        response = [
+            {
+                "id": product[0],
+                "name": product[1],
+                "owner_id": product[2],
+                "category": product[3],
+                "price": product[4],
+                "description": product[5],
+                "image": product[6],
+                "quantity": product[7],
+                "buyer_id": product[8]
+            } 
+            for product in products
+        ]
+    except Exception as e:
+        response = {"message": str(e)}
+    finally:
+        conn.close()
+    
+    # Return HTTP response with JSON data
+    return 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n' + json.dumps(response)
+
 
 def rate_product(data):
     conn = sqlite3.connect(DB_NAME)
@@ -211,15 +241,6 @@ def add_product(data):
     conn.close()
     return '{"message": "Product added successfully"}'
 
-
-# List all products
-def list_products():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT * FROM products")
-    products = c.fetchall()
-    conn.close()
-    return json.dumps(products)
 
 # Buy product
 def buy_product(data):
