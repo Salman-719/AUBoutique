@@ -41,6 +41,9 @@ class MainWindow(QMainWindow):
         self.pages['products'] = ProductsPage(self)
         self.stack.addWidget(self.pages['products'])
 
+        # Currency Page
+        self.pages['currency'] = CurrencyPage(self)
+        self.stack.addWidget(self.pages['currency'])
         # Chat Page
         self.pages['chat'] = ChatPage(self)
         self.stack.addWidget(self.pages['chat'])
@@ -198,87 +201,6 @@ class HomePage(QWidget):
             self.parent.switch_page('login')
 
 
-class ProductsPage(QWidget):
-    def __init__(self, parent):
-        super().__init__()
-        self.parent = parent
-        layout = QVBoxLayout()
-
-        self.title_label = QLabel("Products")
-        self.title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.title_label)
-
-        self.products_list = QListWidget()
-        layout.addWidget(self.products_list)
-
-        self.refresh_button = QPushButton("Refresh Products")
-        self.refresh_button.clicked.connect(self.load_products)
-        layout.addWidget(self.refresh_button)
-
-        self.back_button = QPushButton("Back to Home")
-        self.back_button.clicked.connect(lambda: self.parent.switch_page('home'))
-        layout.addWidget(self.back_button)
-
-        self.setLayout(layout)
-
-    def load_products(self):
-        response = self.parent.boutique.list_products()
-        if "error" in response:
-            QMessageBox.critical(self, "Error", response["error"])
-        else:
-            self.products_list.clear()
-            for product in response.get("products", []):
-                self.products_list.addItem(f"{product['name']} - {product['price']} USD")
-
-class ProductsPage(QWidget):
-    def __init__(self, parent):
-        super().__init__()
-        self.parent = parent
-        layout = QVBoxLayout()
-
-        self.title_label = QLabel("Products")
-        self.title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.title_label)
-
-        self.products_list = QListWidget()
-        layout.addWidget(self.products_list)
-
-        self.buy_button = QPushButton("Buy Selected Product")
-        self.buy_button.clicked.connect(self.handle_buy_product)
-        layout.addWidget(self.buy_button)
-
-        self.refresh_button = QPushButton("Refresh Products")
-        self.refresh_button.clicked.connect(self.load_products)
-        layout.addWidget(self.refresh_button)
-
-        self.back_button = QPushButton("Back to Home")
-        self.back_button.clicked.connect(lambda: self.parent.switch_page('home'))
-        layout.addWidget(self.back_button)
-
-        self.setLayout(layout)
-
-    def load_products(self):
-        response = self.parent.boutique.list_products()
-        if "error" in response:
-            QMessageBox.critical(self, "Error", response["error"])
-        else:
-            self.products_list.clear()
-            for product in response.get("products", []):
-                self.products_list.addItem(f"{product['id']} - {product['name']} - {product['price']} USD")
-
-    def handle_buy_product(self):
-        selected_item = self.products_list.currentItem()
-        if selected_item:
-            product_id = selected_item.text().split(" - ")[0]  # Extract product ID
-            response = self.parent.boutique.buy_product(product_id)
-            if "error" in response:
-                QMessageBox.critical(self, "Error", response["error"])
-            else:
-                QMessageBox.information(self, "Success", "Product purchased successfully!")
-                self.load_products()
-        else:
-            QMessageBox.warning(self, "Warning", "Please select a product to buy.")
-
 class UserProductsPage(QWidget):
     def __init__(self, parent):
         super().__init__()
@@ -313,7 +235,9 @@ class UserProductsPage(QWidget):
         else:
             self.results_list.clear()
             for product in response:
-                self.results_list.addItem(f"{product['name']} - {product['price']} USD")
+                product_details = f"ID: {product['id']} | Name: {product['name']} | Price: {product['price']} USD| Quantity: {product["quantity"]} | average rating: {self.parent.boutique.view_average_rating(product['id'])['average_rating']}"
+
+                self.results_list.addItem(product_details)
 
 class AddProductPage(QWidget):
     def __init__(self, parent):
@@ -505,7 +429,7 @@ class ProductsPage(QWidget):
             if products:
                 for product in products:
                     # Display product details (adjust as needed for your backend response structure)
-                    product_details = f"ID: {product['id']} | Name: {product['name']} | Price: {product['price']} | Quantity: {product["quantity"]} USD"
+                    product_details = f"ID: {product['id']} | Name: {product['name']} | Price: {product['price']} USD| Quantity: {product["quantity"]} | average rating: {self.parent.boutique.view_average_rating(product['id'])['average_rating']}"
                     self.products_list.addItem(product_details)
             else:
                 self.products_list.addItem("No products available.")
@@ -559,6 +483,11 @@ class HomePage(QWidget):
         self.add_product_button.clicked.connect(lambda: parent.switch_page('add_product'))
         layout.addWidget(self.add_product_button)
 
+        #currencies rate
+        self.currency_button = QPushButton("View Currency Rates")
+        self.currency_button.clicked.connect(lambda: self.parent.switch_page('currency'))
+        layout.addWidget(self.currency_button)
+
         # Logout Button
         self.logout_button = QPushButton("Logout")
         self.logout_button.clicked.connect(self.handle_logout)
@@ -578,7 +507,38 @@ class HomePage(QWidget):
             QMessageBox.information(self, "Success", "Logged out successfully!")
             self.parent.switch_page('login')
 
+class CurrencyPage(QWidget):
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent
+        layout = QVBoxLayout()
 
+        self.title_label = QLabel("Currency Rates")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.title_label)
+
+        self.currency_list = QListWidget()
+        layout.addWidget(self.currency_list)
+
+        self.refresh_button = QPushButton("Refresh Rates")
+        self.refresh_button.clicked.connect(self.load_rates)
+        layout.addWidget(self.refresh_button)
+
+        self.back_button = QPushButton("Back to Home")
+        self.back_button.clicked.connect(lambda: self.parent.switch_page('home'))
+        layout.addWidget(self.back_button)
+
+        self.setLayout(layout)
+
+    def load_rates(self):
+        base_currency = 'USD'  # Set to your default or chosen base currency
+        rates = self.parent.boutique.get_currency_rates(base_currency)
+        if "error" not in rates:
+            self.currency_list.clear()
+            for currency, rate in rates.items():
+                self.currency_list.addItem(f"{currency} : {rate}")
+        else:
+            QMessageBox.critical(self, "Error", "Failed to fetch currency rates")
 
 class SearchPage(QWidget):
     def __init__(self, parent):
@@ -617,8 +577,9 @@ class SearchPage(QWidget):
             QMessageBox.critical(self, "Error", response["error"])
         else:
             self.results_list.clear()
-            for product in response.get("products", []):
-                self.results_list.addItem(f"{product['name']} - {product['price']} USD")
+            for product in response:
+                product_details = f"ID: {product['id']} | Name: {product['name']} | Price: {product['price']} USD| Quantity: {product["quantity"]} | average rating: {self.parent.boutique.view_average_rating(product['id'])['average_rating']}"
+                self.results_list.addItem(product_details)
 
 
 if __name__ == '__main__':

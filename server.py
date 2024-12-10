@@ -272,10 +272,33 @@ def buy_product(data):
 def search_product(search_term):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT * FROM products WHERE name LIKE ?", ('%' + search_term + '%',))
-    products = c.fetchall()
-    conn.close()
-    return json.dumps(products)
+    try:
+        # Search for products that match the search term
+        c.execute("SELECT * FROM products WHERE name LIKE ?", ('%' + search_term + '%',))
+        products = c.fetchall()
+        
+        # Structure the response data as JSON
+        response = [
+            {
+                "id": product[0],
+                "name": product[1],
+                "owner_id": product[2],
+                "category": product[3],
+                "price": product[4],
+                "description": product[5],
+                "image": product[6],
+                "quantity": product[7],
+                "buyer_id": product[8]
+            } 
+            for product in products
+        ]  
+    except Exception as e:
+        # Handle exceptions by returning an error message
+        response = {"message": str(e)}
+    finally:
+        # Ensure the database connection is closed
+        conn.close()
+    return 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n' + json.dumps(response)
 
 # Search for all products by a specific user
 def search_user_products(username):
@@ -284,13 +307,35 @@ def search_user_products(username):
     c.execute("SELECT id FROM users WHERE username = ?", (username,))
     user = c.fetchone()
     if user:
-        c.execute("SELECT * FROM products WHERE owner_id = ?", (user[0],))
-        products = c.fetchall()
-        conn.close()
-        return json.dumps(products)
+        try:
+            c.execute("SELECT * FROM products WHERE owner_id = ?", (user[0],))
+            products = c.fetchall()
+            response = [
+                {
+                    "id": product[0],
+                    "name": product[1],
+                    "owner_id": product[2],
+                    "category": product[3],
+                    "price": product[4],
+                    "description": product[5],
+                    "image": product[6],
+                    "quantity": product[7],
+                    "buyer_id": product[8]
+                } 
+                for product in products
+            ]  
+        except Exception as e:
+            # Handle exceptions by returning an error message
+            response = {"message": str(e)}
+        finally:
+            # Ensure the database connection is closed
+            conn.close()
+        return 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n' + json.dumps(response)
+
+
     else:
         conn.close()
-        return '{"message": "User not found"}'
+        return '{"error": "User not found"}'
 
 # Send a message to another user
 def send_message(data):
