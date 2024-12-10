@@ -10,7 +10,6 @@ DB_NAME = 'auboutique.db'
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-# Setup database and tables if they do not exist
 def setup_database():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -22,7 +21,8 @@ def setup_database():
                     username TEXT UNIQUE,
                     password TEXT,
                     online INTEGER DEFAULT 0,
-                    port INTEGER DEFAULT NULL
+                    port INTEGER DEFAULT NULL,
+                    ip_address TEXT DEFAULT NULL
                 )''')
     c.execute('''CREATE TABLE IF NOT EXISTS products (
                     id INTEGER PRIMARY KEY,
@@ -32,6 +32,7 @@ def setup_database():
                     price REAL,
                     description TEXT,
                     image TEXT,
+                    quantity INTEGER DEFAULT 1,
                     buyer_id INTEGER DEFAULT NULL,
                     FOREIGN KEY (owner_id) REFERENCES users (id),
                     FOREIGN KEY (buyer_id) REFERENCES users (id)
@@ -45,8 +46,19 @@ def setup_database():
                     FOREIGN KEY (sender_id) REFERENCES users (id),
                     FOREIGN KEY (receiver_id) REFERENCES users (id)
                 )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS product_ratings (
+                    id INTEGER PRIMARY KEY,
+                    product_id INTEGER,
+                    user_id INTEGER,
+                    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+                    FOREIGN KEY (product_id) REFERENCES products (id),
+                    FOREIGN KEY (user_id) REFERENCES users (id),
+                    UNIQUE(product_id, user_id)
+                )''')
     conn.commit()
     conn.close()
+
+
 
 # Client handler function
 def handle_client(conn, addr):
@@ -73,6 +85,10 @@ def process_request(request):
             return register_user(data)
         elif path == '/login':
             return login_user(data)
+        elif path == '/rate_product':
+            return rate_product(data)
+        elif path == '/get_average_rating':
+            return get_average_rating(data)
         elif path == '/logout':
             return logout_user(data['user_id'])
         elif path == '/add_product':
@@ -85,12 +101,48 @@ def process_request(request):
             return search_user_products(data['username'])
         elif path == '/send_message':
             return send_message(data)
+        elif path == '/get_user_connection_info':
+            return get_user_connection_info(data)
         else:
             return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
     elif method == 'GET' and path == '/products':
         return list_products()
     else:
         return 'HTTP/1.1 404 Not Found\r\n\r\n{"message": "Not found"}'
+
+def rate_product(data):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        # Insert or update the rating
+        c.execute('''
+            INSERT INTO product_ratings (product_id, user_id, rating)
+            VALUES (?, ?, ?)
+            ON CONFLICT(product_id, user_id) DO UPDATE SET rating = excluded.rating
+        ''', (data['product_id'], data['user_id'], data['rating']))
+        conn.commit()
+        response = {"message": "Rating submitted successfully"}
+    except Exception as e:
+        response = {"message": str(e)}
+    finally:
+        conn.close()
+    return 'HTTP/1.1 200 OK\r\n\r\n' + json.dumps(response)
+    
+def get_average_rating(data):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        c.execute('''
+            SELECT AVG(rating) as average_rating FROM product_ratings WHERE product_id = ?
+        ''', (data['product_id'],))
+        avg_rating = c.fetchone()
+        response = {"average_rating": avg_rating[0] if avg_rating[0] else 0}
+    except Exception as e:
+        response = {"message": str(e)}
+    finally:
+        conn.close()
+    return 'HTTP/1.1 200 OK\r\n\r\n' + json.dumps(response)
+
 
 # User registration
 def register_user(data):
@@ -107,6 +159,7 @@ def register_user(data):
     finally:
         conn.close()
 
+
 # User login
 def login_user(data):
     conn = sqlite3.connect(DB_NAME)
@@ -116,13 +169,28 @@ def login_user(data):
     user = c.fetchone()
     
     if user:
-        c.execute("UPDATE users SET online = 1, port = ? WHERE id = ?", (data['port'], user[0]))
+        # Update online status, IP, and port
+        c.execute("UPDATE users SET online = 1, port = ?, ip_address = ? WHERE id = ?", 
+          (data['port'], data['ip_address'], user[0]))
+
         conn.commit()
         conn.close()
         return json.dumps({"user_id": user[0], "message": "Login successful"})
     
     conn.close()
     return json.dumps({"message": "Invalid credentials"})
+
+def get_user_connection_info(data):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT ip_address, port FROM users WHERE username = ? AND online = 1", (data['username'],))
+    user_info = c.fetchone()
+    conn.close()
+    
+    if user_info:
+        return json.dumps({"ip_address": user_info[0], "port": user_info[1]})
+    else:
+        return '{"message": "User is not online"}'
 
 # User logout
 def logout_user(user_id):
@@ -137,11 +205,12 @@ def logout_user(user_id):
 def add_product(data):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO products (name, owner_id, category, price, description, image) VALUES (?, ?, ?, ?, ?, ?)",
-              (data['name'], data['owner_id'], data['category'], data['price'], data['description'], data['image']))
+    c.execute("INSERT INTO products (name, owner_id, category, price, description, image, quantity) VALUES (?, ?, ?, ?, ?, ?, ?)",
+              (data['name'], data['owner_id'], data['category'], data['price'], data['description'], data['image'], data['quantity']))
     conn.commit()
     conn.close()
     return '{"message": "Product added successfully"}'
+
 
 # List all products
 def list_products():
@@ -157,14 +226,21 @@ def buy_product(data):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     try:
-        c.execute("SELECT * FROM products WHERE id = ? AND buyer_id IS NULL", (data['product_id'],))
+        # Check if product exists and has available quantity
+        c.execute("SELECT quantity FROM products WHERE id = ? AND buyer_id IS NULL", (data['product_id'],))
         product = c.fetchone()
-        if product:
-            c.execute("UPDATE products SET buyer_id = ? WHERE id = ?", (data['buyer_id'], data['product_id']))
+        if product and product[0] > 0:
+            # Decrement quantity
+            new_quantity = product[0] - 1
+            if new_quantity == 0:
+                # Mark as sold out by assigning a buyer_id
+                c.execute("UPDATE products SET buyer_id = ?, quantity = ? WHERE id = ?", (data['buyer_id'], new_quantity, data['product_id']))
+            else:
+                c.execute("UPDATE products SET quantity = ? WHERE id = ?", (new_quantity, data['product_id']))
             conn.commit()
             response = {"message": "Product purchase successful"}
         else:
-            response = {"message": "Product not available or already sold"}
+            response = {"message": "Product not available or sold out"}
     except Exception as e:
         response = {"message": str(e)}
     finally:
