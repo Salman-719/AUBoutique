@@ -6,6 +6,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from client import AUBoutique
 import random
+import os
+from openai import OpenAI
+client = OpenAI()
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -23,6 +27,9 @@ class MainWindow(QMainWindow):
         # Pages
         self.pages = {}
         self.init_pages()
+
+        self.pages['chatgpt'] = ChatGPTPage(self)
+        self.stack.addWidget(self.pages['chatgpt'])
 
     def init_pages(self):
         # Login Page
@@ -493,6 +500,10 @@ class HomePage(QWidget):
         self.logout_button.clicked.connect(self.handle_logout)
         layout.addWidget(self.logout_button)
 
+        self.chatgpt_button = QPushButton("Chat with ChatGPT")
+        self.chatgpt_button.clicked.connect(lambda: parent.switch_page('chatgpt'))
+        layout.addWidget(self.chatgpt_button)
+
         self.setLayout(layout)
 
     def handle_logout(self):
@@ -539,6 +550,81 @@ class CurrencyPage(QWidget):
                 self.currency_list.addItem(f"{currency} : {rate}")
         else:
             QMessageBox.critical(self, "Error", "Failed to fetch currency rates")
+
+class ChatGPTPage(QWidget):
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent
+        layout = QVBoxLayout()
+
+        # Title label
+        self.title_label = QLabel("Chat with ChatGPT")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.title_label)
+
+        # Chat display area
+        self.chat_display = QListWidget()
+        layout.addWidget(self.chat_display)
+
+        # Input form
+        self.input_form = QFormLayout()
+        self.user_input = QLineEdit()
+        self.input_form.addRow("Your Message:", self.user_input)
+        layout.addLayout(self.input_form)
+
+        # Buttons
+        self.send_button = QPushButton("Send")
+        self.send_button.clicked.connect(self.handle_send_message)
+        self.back_button = QPushButton("Back to Home")
+        self.back_button.clicked.connect(lambda: self.parent.switch_page('home'))
+
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.send_button)
+        button_layout.addWidget(self.back_button)
+        layout.addLayout(button_layout)
+
+        self.setLayout(layout)
+
+    def handle_send_message(self):
+        user_message = self.user_input.text()
+        if not user_message:
+            QMessageBox.warning(self, "Warning", "Please enter a message.")
+            return
+
+        # Display the user's message in the chat
+        self.chat_display.addItem(f"You: {user_message}")
+        self.user_input.clear()
+
+        # Send the message to ChatGPT API
+        response = self.send_to_chatgpt(user_message)
+        if response:
+            self.chat_display.addItem(f"ChatGPT: {response}")
+        else:
+            self.chat_display.addItem("ChatGPT: Error retrieving response.")
+
+    def send_to_chatgpt(self, message):
+        api_key = os.getenv("OPENAI_API_KEY")  
+
+        if not api_key:
+            print("Error: OPENAI_API_KEY is not set.")
+            return "API key not found."
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {
+                    "role": "user",
+                    "content": message
+                }
+            ]
+        )
+        try:
+            return completion.choices[0].message.content
+        except Exception as e:
+            print(f"Error communicating with ChatGPT API: {e}")
+            return None
+
 
 class SearchPage(QWidget):
     def __init__(self, parent):
