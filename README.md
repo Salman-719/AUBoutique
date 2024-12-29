@@ -1,76 +1,42 @@
 # AUBoutique - An Online Marketplace for AUB Community 
 
 AUBoutique is a user-friendly platform that facilitates the buying and selling of a variety of products such as craftwork, textbooks, and collectibles for the AUB community. This project is developed using a client-server architecture in Python.
+# AUBoutique
 
-## Features
+## Overview
+**AUBoutique** is an online platform designed to manage user registration, product listings, purchasing, messaging, and peer-to-peer communication, with additional features like product ratings and currency exchange rates. This project implements a hybrid client-server and peer-to-peer architecture, allowing users to interact efficiently with the system.
 
-### Client-Side
-- **User Registration**: Users can sign up by providing their name, email, username, and password.
-- **User Login**: Registered users can log in to their account using their credentials.
-- **Product Listing**: Users can view a list of available products for sale, along with the seller's information.
-- **Product Details**: Users can view products from a specific seller.
-- **Live Chatting**: Users can initiate a text chat with other users through the platform if both are online.
-- **Buy Products**: Buyers can select products and confirm purchases, receiving a confirmation message to collect the item from the AUB Post Office.
-- **Sell Products**: Sellers can add products to the marketplace by providing a product name, image, price, and description.
+## System Architecture
+The system utilizes both client-server and peer-to-peer (P2P) models:
 
-### Server-Side
-- **Account Management**: The server allows user registration, login, and authentication.
-- **Product Management**: The server maintains a list of available products and handles product listings and purchases.
-- **Text Messaging**: The server manages communication between buyers and sellers, provided both are online.
-- **Database**: A simple database (e.g., SQLite) stores user accounts and product information.
-- **Concurrency**: The server can handle multiple users simultaneously using multi-threading.
+- **Client-Server Communication**: Handles user registration, product management, login, and messaging.
+- **Peer-to-Peer (P2P) Messaging**: After logging in, users can communicate directly with each other without routing through the server, improving efficiency and reducing server load.
 
-## Installation
+## Key Features
 
-### Prerequisites
-- Python 3.x
-- SQLite 
-- Basic understanding of client-server architecture
+- **User Management**:
+  - Registration and login
+  - User session management (online/offline status)
+  
+- **Product Management**:
+  - Add, list, search, and buy products
+  - Rate products based on user satisfaction
+  
+- **Messaging System**:
+  - Send and receive messages between users
+  - Peer-to-peer messaging after login
 
-### Clone the Repository
-```bash
-git clone https://github.com/Salman-719/AUBoutique.git
-cd AUBoutique
+- **Currency Rates**:
+  - View real-time exchange rates from a web service
 
-```
+- **ChatGPT Integration**:
+  - Send user messages to ChatGPT and receive intelligent responses
+  
+- **Interactive GUI**:
+  - Built with PyQt5, enhancing user interaction with the platform
 
-### Install Required Libraries
-To install the necessary Python libraries, run:
+## Setup
 
-```bash
-pip install -r requirements.txt
-```
-### Run the Server
-Start the server by specifying a port number:
-
-```bash
-python server.py <port_number>
-```
-Example:
-```bash
-python server.py 8080
-```
-
-Run the Client
-Start the client by specifying the server domain (or IP address) and port number:
-
-```bash
-python client.py <server_domain> <port_number>
-```
-Example:
-
-```bash
-python client.py localhost 8080
-```
-
-
-## Project Structure
-```bash
-AUBoutique/
-├── client.py                # Client-side code for connecting to the server
-├── server.py                # Server-side code to handle requests and manage the database
-├── auboutique.db            # SQLite database file (auto-generated on first run)
-├── requirements.txt         # Python dependencies (if needed)
-└── README.md                # Documentation for the project
-
-```
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Salman-719/AUBoutique
